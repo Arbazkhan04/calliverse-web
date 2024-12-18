@@ -139,4 +139,9 @@ UserSchema.methods.generateEmailVerificationCode = function () {
   return verificationCode; // Return unhashed code for sending via email
 };
 
+
+UserSchema.virtual("profileImageUrl").get(function () {
+  return this.profileImage?.imageUrl || null;
+});
+
 module.exports = mongoose.model("User", UserSchema);
