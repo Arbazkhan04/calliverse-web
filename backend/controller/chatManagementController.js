@@ -4,10 +4,17 @@ const Chat = require("../modals/chatManagementModel.js");
 const {fetchAllChats} = require("../services/chatManagementService.js")
 const createChat = async (req, res, next) => {
   try {
+
+
     const participants = req.body?.participants;
+
+    if(!participants){
+      throw new CustomError("participants field is required",400)
+    }
     const userAId = participants[0];
     const userBId = participants[1];
 
+   
     // Validation: Ensure two unique participants
     if (userAId === userBId) {
       return responseHandler(res, 400, "A user cannot chat with themselves.");

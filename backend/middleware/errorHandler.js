@@ -1,10 +1,21 @@
 
 const errorHandler = (err, req, res, next) => {
-    const statusCode = err.statusCode || 500; // Default to Internal Server Error
-    const message = err.message || 'Internal Server Error';
+    let statusCode = err.statusCode || 500; // Default to Internal Server Error
+    let message = err.message || 'Internal Server Error';
+
+
+ // Handle errors containing "Cast to ObjectId failed"
+ if (err.message && err.message.includes("Cast to ObjectId failed")) {
+    console.log("Handling CastError based on message");
+    message = `Invalid ID format`;
+    statusCode = 400; // Bad Request
+}
     
     // Log error (optional)
     console.error(`[ERROR] ${err.stack || err.message}`);
+
+
+
 
     // Send structured error response
     res.status(statusCode).json({
@@ -15,3 +26,7 @@ const errorHandler = (err, req, res, next) => {
 };
 
 module.exports = errorHandler;
+
+
+
+
