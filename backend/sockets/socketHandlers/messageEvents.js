@@ -69,11 +69,9 @@
 //     }
 //   });
 
-
-
 //   //acknowledgement event the message has been successfully reached to the receiver
 //   socket.on("messageReceived", async (response) => {
-    
+
 //     console.log("Message delievered:", response);
 //   });
 
@@ -102,15 +100,10 @@
 
 // };
 
-
-
-
-
-
-
 const {
   createMessage,
   fetchAllMessages,
+  updateMessage,
 } = require("../../services/messageManagementService");
 const Chat = require("../../modals/chatManagementModel");
 const { handleUploadedFiles } = require("../../utils/handleUploadedFIles");
@@ -202,127 +195,119 @@ module.exports = (io, socket, onlineUsers) => {
    * Event: messageReceived
    * Acknowledges that the message has been received by the recipient.
    */
-  socket.on("messageReceived", async (response) => {
+  socket.on("messageReceived", async (response, callback) => {
     try {
       if (!response || !response.messageId) {
         throw new CustomError("Invalid response data.", 400);
       }
-  
-      // Optionally, update the message status in the database
+
+      // Update the message status in the database
+      const updatedMessage = await updateMessage(response.messageId, {
+        delivered: true,
+      });
+
       console.log(`Message ${response.messageId} delivered successfully.`);
+
+      // Emit the updated message status back to the sender
+      if (callback) {
+        callback({
+          success: true,
+          message: "Message delivery status updated.",
+          data: updatedMessage,
+        });
+      }
     } catch (error) {
       console.error("Error in messageReceived event:", error.message);
+
+      if (callback) {
+        callback({
+          success: false,
+          message: error.message || "Failed to update message delivery status.",
+        });
+      }
     }
   });
 
-  /**
-   * Event: getAllChatMessages
-   * Fetches all messages for a particular chat with pagination.
-   */
-  // socket.on("getAllChatMessages", (payload, callback) => {
-  //   validateSocketRequest(getAllChatMessagesSchema)(
-  //     payload,
-  //     callback,
-  //     async () => {
-  //       try {
-  //         const { chatId, page, limit } = payload.validatedData;
-
-  //         if (!chatId || !page || !limit) {
-  //           throw new CustomError(
-  //             "chatId, page, and limit are required fields.",
-  //             400
-  //           );
-  //         }
-
-  //         const result = await fetchAllMessages(
-  //           chatId,
-  //           parseInt(page, 10),
-  //           parseInt(limit, 10)
-  //         );
-
-  //         callback({
-  //           success: true,
-  //           data: result,
-  //           message: "Messages fetched successfully.",
-  //         });
-  //       } catch (error) {
-  //         console.error("Error fetching messages:", error.message);
-  //         callback({
-  //           success: false,
-  //           error: error.message || "Failed to fetch messages.",
-  //         });
-  //       }
-  //     }
-  //   );
-  // });
-
-
-
-  // socket.on("getAllChatMessages", async (payload, callback) => {
-  //   try {
-  //     // Ensure callback is a function
-  //     if (typeof callback !== "function") {
-  //       console.error("Callback is missing or invalid.");
-  //       return;
-  //     }
-  
-  //     // Validate payload
-  //     if (!payload || !payload.chatId || !payload.page || !payload.limit) {
-  //       return callback({
-  //         success: false,
-  //         error: "chatId, page, and limit are required fields.",
-  //       });
-  //     }
-  
-  //     const { chatId, page, limit } = payload;
-  
-  //     // Fetch messages
-  //     const result = await fetchAllMessages(
-  //       chatId,
-  //       parseInt(page, 10),
-  //       parseInt(limit, 10)
-  //     );
-  
-  //     // Send success response
-  //     callback({
-  //       success: true,
-  //       data: result,
-  //       message: "Messages fetched successfully.",
-  //     });
-  //   } catch (error) {
-  //     console.error("Error fetching messages:", error.message);
-  //     callback({
-  //       success: false,
-  //       error: error.message || "Failed to fetch messages.",
-  //     });
-  //   }
-  // });
-  
-
-
-
   socket.on("getAllChatMessages", async (payload, callback) => {
     try {
-        if (!payload || !payload.chatId || !payload.page || !payload.limit) {
-            return callback({
-                success: false,
-                error: "chatId, page, and limit are required fields.",
-            });
-        }
-
-        const { chatId, page, limit } = payload;
-        const result = await fetchAllMessages(chatId, parseInt(page, 10), parseInt(limit, 10));
-
-        callback({
-            success: true,
-            data: result,
-            message: "Messages fetched successfully.",
+      if (!payload || !payload.chatId || !payload.page || !payload.limit) {
+        return callback({
+          success: false,
+          error: "chatId, page, and limit are required fields.",
         });
+      }
+
+      const { chatId, page, limit } = payload;
+      const result = await fetchAllMessages(
+        chatId,
+        parseInt(page, 10),
+        parseInt(limit, 10)
+      );
+
+      callback({
+        success: true,
+        data: result,
+        message: "Messages fetched successfully.",
+      });
     } catch (error) {
-        callback({
-            success: false,
-            error: error.message || "Failed to fetch messages.",
-        });
+      callback({
+        success: false,
+        error: error.message || "Failed to fetch messages.",
+      });
     }
+  });
+
+
+
+
+  /**
+ * Event: messageSeen
+ * Acknowledges that the message has been seen by the recipient and updates the isSeen field.
+ */
+socket.on("messageSeen", async (response, callback) => {
+  try {
+    const { messageId, receiverId } = response;
+
+    console.log("event listened")
+    if (!messageId || !receiverId) {
+      throw new CustomError("Invalid response data. Both messageId and receiverId are required.", 400);
+    }
+
+    // Get the current timestamp
+    const readAt = new Date();
+
+    // Update the isSeen field and readBy field in the database
+    const updatedMessage = await updateMessage(messageId, {
+      isSeen: { status: true, readAt },
+      $push: {
+        readBy: { userId: receiverId, readAt },
+      },
+    });
+
+    if (!updatedMessage) {
+      throw new CustomError("Message not found.", 404);
+    }
+
+    console.log(`Message ${messageId} seen by user ${receiverId} at ${readAt}.`);
+
+    // Send acknowledgment back to the emitter with the updated message
+    if (callback) {
+      callback({
+        success: true,
+        message: "Message seen status updated.",
+        data: updatedMessage,
+      });
+    }
+  } catch (error) {
+    console.error("Error in messageSeen event:", error.message);
+
+    if (callback) {
+      callback({
+        success: false,
+        message: error.message || "Failed to update message seen status.",
+      });
+    }
+  }
 });
+
 };

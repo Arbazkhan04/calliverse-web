@@ -57,6 +57,16 @@ const MessageSchema = new mongoose.Schema(
         },
       },
     ], // List of users who have read the message
+
+    isSeen: {
+      status: {
+        type: Boolean,
+        default:false,
+      },
+      readAt: {
+        type: Date,
+      },
+    },
   },
   { timestamps: true }
 );

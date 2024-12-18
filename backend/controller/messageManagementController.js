@@ -6,7 +6,8 @@ const {
   createMessage,
   getUndeliveredMessages,
   deleteMediaFile,
-  fetchAllMessages
+  fetchAllMessages,
+  updateMessage
 } = require("../services/messageManagementService.js");
 
 // Upload files controller
@@ -121,6 +122,32 @@ const fetchAllMessagesController = async (req, res, next) => {
 };
 
 
+/**
+ * Controller to update a message by ID.
+ * @param {Object} req - Express request object.
+ * @param {Object} res - Express response object.
+ * @param {Function} next - Express next middleware function.
+ * @returns {Promise<void>}
+ */
+const updateMessageController = async (req, res, next) => {
+  try {
+    const { messageId } = req.params;
+    const updateData = req.body;
+
+    // Call the service method to update the message
+    const updatedMessage = await updateMessage(messageId, updateData);
+
+    res.status(200).json({
+      success: true,
+      message: "Message updated successfully.",
+      data: updatedMessage,
+    });
+  } catch (error) {
+    next(error); // Pass error to the error handler middleware
+  }
+};
+
+
 
 
 module.exports = {
@@ -128,7 +155,8 @@ module.exports = {
   newMessage,
   getUndeliveredMessagesController,
   deleteUploadedFiles,
-  fetchAllMessagesController
+  fetchAllMessagesController,
+  updateMessageController
 };
 
 
