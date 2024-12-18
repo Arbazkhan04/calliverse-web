@@ -140,8 +140,8 @@ UserSchema.methods.generateEmailVerificationCode = function () {
 };
 
 
-UserSchema.virtual("profileImageUrl").get(function () {
-  return this.profileImage?.imageUrl || null;
-});
+// UserSchema.virtual("profileImageUrl").get(function () {
+//   return this.profileImage?.imageUrl || null;
+// });
 
 module.exports = mongoose.model("User", UserSchema);

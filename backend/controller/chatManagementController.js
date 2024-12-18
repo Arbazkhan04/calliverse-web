@@ -1,52 +1,55 @@
-const CustomError = require("../utils/customError.js");
+const CustomError = require("../utils/customError");
+
 const responseHandler = require("../utils/responseHandler.js");
 const Chat = require("../modals/chatManagementModel.js");
-const {fetchAllChats} = require("../services/chatManagementService.js")
-const createChat = async (req, res, next) => {
-  try {
+const {fetchAllChats,createChatService} = require("../services/chatManagementService.js")
 
 
-    const participants = req.body?.participants;
+// const createChat = async (req, res, next) => {
+//   try {
 
-    if(!participants){
-      throw new CustomError("participants field is required",400)
-    }
-    const userAId = participants[0];
-    const userBId = participants[1];
+
+//     const participants = req.body?.participants;
+
+//     if(!participants){
+//       throw new CustomError("participants field is required",400)
+//     }
+//     const userAId = participants[0];
+//     const userBId = participants[1];
 
    
-    // Validation: Ensure two unique participants
-    if (userAId === userBId) {
-      return responseHandler(res, 400, "A user cannot chat with themselves.");
-    }
+//     // Validation: Ensure two unique participants
+//     if (userAId === userBId) {
+//       return responseHandler(res, 400, "A user cannot chat with themselves.");
+//     }
 
-    // Check if chat already exists
-    const existingChat = await Chat.findOne({
-      participants: { $all: [userAId, userBId] },
-    });
+//     // Check if chat already exists
+//     const existingChat = await Chat.findOne({
+//       participants: { $all: [userAId, userBId] },
+//     });
 
-    if (existingChat) {
-      return responseHandler(
-        res,
-        200,
-        "Chat found successfully.",
-        existingChat
-      );
-    }
+//     if (existingChat) {
+//       return responseHandler(
+//         res,
+//         200,
+//         "Chat found successfully.",
+//         existingChat
+//       );
+//     }
 
-    // Create a new chat instance
-    const newChat = new Chat({
-      participants: [userAId, userBId],
-    });
+//     // Create a new chat instance
+//     const newChat = new Chat({
+//       participants: [userAId, userBId],
+//     });
 
-    // Save the new chat to the database
-    await newChat.save();
+//     // Save the new chat to the database
+//     await newChat.save();
 
-    return responseHandler(res, 201, "Chat created successfully.", newChat);
-  } catch (error) {
-    next(error instanceof CustomError ? error : new CustomError(error.message, 500));
-  }
-};
+//     return responseHandler(res, 201, "Chat created successfully.", newChat);
+//   } catch (error) {
+//     next(error instanceof CustomError ? error : new CustomError(error.message, 500));
+//   }
+// };
 
 const fetchAllChatsController = async (req, res, next) => {
   try {
@@ -67,6 +70,32 @@ const fetchAllChatsController = async (req, res, next) => {
     );
   }
 };
+
+
+
+
+/**
+ * Handles the creation of a new chat or retrieves an existing one.
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ * @param {Function} next - The next middleware function.
+ */
+const createChat = async (req, res, next) => {
+  try {
+    const participants = req.body?.participants;
+
+    if (!participants) {
+      throw new CustomError('Participants field is required.', 400);
+    }
+
+    const chat = await createChatService(participants);
+
+    return responseHandler(res, 201, 'Chat created successfully.', chat);
+  } catch (error) {
+    next(error instanceof CustomError ? error : new CustomError(error.message, 500));
+  }
+};
+
 
 module.exports = {
   createChat,
