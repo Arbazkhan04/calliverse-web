@@ -3,9 +3,9 @@ const getUndeliveredMessages = require('../../controller/messageManagementContro
 
 module.exports = (io, socket, onlineUsers) => {
   // User comes online
-  socket.on("userOnline", async (userId) => {
-    onlineUsers.set(userId, socket.id);
-
+  socket.on("userOnline", async (response) => {
+    onlineUsers.set(response.userId, socket.id);
+const userId=response.userId;
     // Fetch undelivered messages
     const undeliveredMessages = await Message.find({ receiverId: userId, delivered: false });
     console.log("underliever messages",undeliveredMessages)
