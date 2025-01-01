@@ -131,6 +131,90 @@ const updateUser = async (userId, updateData, profileImageFile = null) => {
 };
 
 
+// const login = async (email, password) => {
+//   try {
+//     // Check if user exists
+//     const user = await User.findOne({ email });
+//     if (!user) {
+//       throw new CustomError("User not found", 404);
+//     }
+
+//     // Check if the password matches
+//     const isMatch = await user.comparePassword(password);
+//     if (!isMatch) {
+//       throw new CustomError("Invalid password", 401); // 401 Unauthorized for incorrect credentials
+//     }
+
+//     // Check if the user's email is verified
+//     if (!user.isEmailVerified) {
+//       // Generate a new email verification code
+//       const verificationCode = user.generateEmailVerificationCode();
+//       await user.save();
+
+//       // Prepare verification email content
+//       const htmlContent = `
+//         <html>
+//           <head>
+//             <style>
+//               body { font-family: Arial, sans-serif; font-size: 16px; color: #333; }
+//               .header { background-color: #f8f8f8; padding: 20px 5px; text-align: center; }
+//               .content { padding: 20px 5px; }
+//               .footer { background-color: #f8f8f8; padding: 20px 5px; text-align: center; font-size: 14px; }
+//               .code { font-size: 24px; font-weight: bold; }
+//             </style>
+//           </head>
+//           <body>
+//             <div class="header">
+//               <h1>Email Verification</h1>
+//             </div>
+//             <div class="content">
+//               <p>Here is your new email verification code:</p>
+//               <p class="code">${verificationCode}</p>
+//               <p>This code will expire in 10 minutes.</p>
+//             </div>
+//             <div class="footer">
+//               <p>Ecofocus Team</p>
+//             </div>
+//           </body>
+//         </html>
+//       `;
+
+//       // Send verification email
+//       await sendEmail({
+//         to: user.email,
+//         subject: "Email Verification",
+//         html: htmlContent,
+//       });
+
+//       throw new CustomError(
+//         "Email not verified. Verification code sent to your email.",
+//         400 // 400 Bad Request for incomplete verification
+//       );
+//     }
+
+//     // Generate JWT token
+//     const token = user.createJWT();
+
+//     // Return user data and token
+//     return {
+//       firstName: user?.firstName || "",
+//       lastName: user?.lastName || "",
+//       profileImage: user?.profileImage || "",
+//       email: user?.email,
+//       isProfileCompleted: user?.isProfileCompleted,
+//       isEmailVerified: user.isEmailVerified,
+//       userId: user._id,
+//       bio: user?.bio || "",
+//       websiteLink: user?.websiteLink || "",
+//       token,
+//     };
+//   } catch (error) {
+//     throw new CustomError(error.message, error.statusCode || 500);
+//   }
+// };
+
+
+
 const login = async (email, password) => {
   try {
     // Check if user exists
@@ -142,7 +226,7 @@ const login = async (email, password) => {
     // Check if the password matches
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      throw new CustomError("Invalid password", 401); // 401 Unauthorized for incorrect credentials
+      throw new CustomError("Invalid password", 401);
     }
 
     // Check if the user's email is verified
@@ -188,7 +272,7 @@ const login = async (email, password) => {
 
       throw new CustomError(
         "Email not verified. Verification code sent to your email.",
-        400 // 400 Bad Request for incomplete verification
+        400
       );
     }
 
@@ -197,21 +281,23 @@ const login = async (email, password) => {
 
     // Return user data and token
     return {
-      firstName: user?.firstName || "",
-      lastName: user?.lastName || "",
-      profileImage: user?.profileImage || "",
-      email: user?.email,
-      isProfileCompleted: user?.isProfileCompleted,
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      profileImage: user.profileImage || "",
+      email: user.email,
+      isProfileCompleted: user.isProfileCompleted,
       isEmailVerified: user.isEmailVerified,
       userId: user._id,
-      bio: user?.bio || "",
-      websiteLink: user?.websiteLink || "",
+      bio: user.bio || "",
+      websiteLink: user.websiteLink || "",
       token,
     };
   } catch (error) {
     throw new CustomError(error.message, error.statusCode || 500);
   }
 };
+
+
 
 /**
  * Fetches all users with pagination.
@@ -246,4 +332,57 @@ const fetchAllUsers = async (page = 1, limit = 20) => {
   }
 };
 
-module.exports = { login, updateUser, createUser, fetchAllUsers };
+
+/**
+ * Verifies the email verification code.
+ * @param {String} email - The email of the user.
+ * @param {String} code - The verification code provided by the user.
+ * @returns {Object} - Contains user details and a JWT token if verified.
+ */
+const verifyEmailCode = async (email, code,fcmToken) => {
+  try {
+    // Find the user by email
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      throw new CustomError("User not found.", 404);
+    }
+
+    // Hash the provided code to compare with the stored hashed code
+    const hashedCode = crypto.createHash("sha256").update(code).digest("hex");
+
+    // Check if the code matches and hasn't expired
+    if (
+      user.emailVerificationCode !== hashedCode ||
+      user.emailVerificationExpire < Date.now()
+    ) {
+      throw new CustomError("Invalid or expired verification code.", 400);
+    }
+
+    // Mark the email as verified and clear the verification fields
+    user.isEmailVerified = true;
+    user.emailVerificationCode = undefined;
+    user.emailVerificationExpire = undefined;
+
+    // Save the updated user document
+    await user.save();
+
+
+     // Save the FCM token
+     await saveFcmToken(user._id, fcmToken);
+
+    // Return user details and JWT token
+    return {
+      userId: user._id,
+      email: user.email,
+      isEmailVerified: user.isEmailVerified,
+      token: user.createJWT(),
+    };
+  } catch (error) {
+    throw new CustomError(error.message, error.statusCode || 500);
+  }
+};
+
+
+
+module.exports = { login, updateUser, createUser, fetchAllUsers,verifyEmailCode };

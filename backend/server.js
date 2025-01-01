@@ -32,11 +32,15 @@ app.use(morgan(":method :url :status :response-time ms"));
 const userManagementRoutes = require("./routes/userManagementRouter.js");
 const messageManagementRoutes = require("./routes/messageManagementRouter.js");
 const chatManagementRoutes = require("./routes/chatManagementRouter.js");
+const FCMManagementRoutes = require("./routes/FCMManagementRouter.js");
+
 
 
 app.use("/api/userManagementRoutes", userManagementRoutes);
 app.use("/api/messageManagmentRoutes", messageManagementRoutes);
 app.use("/api/chatManagmentRoutes", chatManagementRoutes);
+app.use("/api/FCMManagmentRoutes", FCMManagementRoutes);
+
 
 
 // Error Handling Middleware

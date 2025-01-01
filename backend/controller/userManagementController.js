@@ -4,21 +4,32 @@ const User = require("../modals/userManagementModal");
 const sendEmail = require("../utils/sendEmail.js");
 const mongoose = require("mongoose"); // Ensure mongoose is imported
 const crypto = require("crypto");
-
-const {updateUser,createUser,login,fetchAllUsers} = require("../services/userManagementService.js"); // Service method
+const { saveFcmToken } = require("../services/FCMService.js");
+const {
+  updateUser,
+  createUser,
+  login,
+  fetchAllUsers,
+  verifyEmailCode,
+} = require("../services/userManagementService.js"); // Service method
 
 const createUserController = async (req, res, next) => {
   try {
     const userData = req.body;
-console.log(userData)
+    console.log(userData);
     // Call the service to create a new user
     const user = await createUser(userData);
 
     // Return success response
-    return responseHandler(res, 200, 'Verfication Code Sent to your email.Code will be expired in 10 minutes ', {
-      email: user.email,
-      isEmailVerified: user.isEmailVerified,
-    });
+    return responseHandler(
+      res,
+      200,
+      "Verfication Code Sent to your email.Code will be expired in 10 minutes ",
+      {
+        email: user.email,
+        isEmailVerified: user.isEmailVerified,
+      }
+    );
   } catch (error) {
     // Pass error to global error handler
     next(
@@ -112,18 +123,27 @@ console.log(userData)
 //   }
 // };
 
-
 const loginController = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, token: fcmToken } = req.body;
+
+    if (!email || !password || !fcmToken) {
+      return responseHandler(
+        res,
+        400,
+        "Email, password, and FCM token are required."
+      );
+    }
 
     // Call the service for user login
-    const data= await login(email, password);
+    const userData = await login(email, password);
+
+    // Save the FCM token
+    await saveFcmToken(userData.userId, fcmToken);
 
     // Send success response
-    return responseHandler(res, 200, "Login successful",data);
+    return responseHandler(res, 200, "Login successful", userData);
   } catch (error) {
-    // Pass error to global error handler
     next(
       error instanceof CustomError ? error : new CustomError(error.message, 500)
     );
@@ -136,13 +156,11 @@ const forgotPassword = async (req, res, next) => {
 
     const user = await User.findOne({ email });
     if (!user) {
-      return res
-        .status(200)
-        .json({
-          error: error.message,
-          message: "Email not found",
-          data: false,
-        });
+      return res.status(200).json({
+        error: error.message,
+        message: "Email not found",
+        data: false,
+      });
     }
 
     // Generate and get reset password token
@@ -202,22 +220,18 @@ const forgotPassword = async (req, res, next) => {
 
       await user.save();
 
-      return res
-        .status(200)
-        .json({
-          error: error.message,
-          message: "Email could not be sent",
-          data: false,
-        });
-    }
-  } catch (error) {
-    return res
-      .status(200)
-      .json({
+      return res.status(200).json({
         error: error.message,
         message: "Email could not be sent",
         data: false,
       });
+    }
+  } catch (error) {
+    return res.status(200).json({
+      error: error.message,
+      message: "Email could not be sent",
+      data: false,
+    });
   }
 };
 
@@ -246,74 +260,98 @@ const resetPassword = async (req, res) => {
 
     await user.save();
 
-    res
-      .status(200)
-      .json({
-        data: true,
-        message: "Password reset successful",
-        userId: user._id,
-        email: user.email,
-        isEmailVerified: user.isEmailVerified,
-        token: user.createJWT(),
-      });
-  } catch (err) {
-    return res
-      .status(200)
-      .json({
-        error: err.message,
-        message: "Password reset failed",
-        data: false,
-      });
-  }
-};
-
-const verifyEmailCode = async (req, res) => {
-  try {
-    const { email, code } = req.body;
-
-    // Find the user by email
-    const user = await User.findOne({ email });
-
-    if (!user) {
-      return res.status(200).json({ message: "User not found", data: false });
-    }
-
-    // Hash the code to compare with the stored hashed code
-    const hashedCode = crypto.createHash("sha256").update(code).digest("hex");
-
-    // Check if the code matches and hasn't expired
-    if (
-      user.emailVerificationCode !== hashedCode ||
-      user.emailVerificationExpire < Date.now()
-    ) {
-      return res
-        .status(200)
-        .json({ message: "Invalid or expired verification code", data: false });
-    }
-
-    // Mark the email as verified and clear the verification fields
-    user.isEmailVerified = true;
-    user.emailVerificationCode = undefined;
-    user.emailVerificationExpire = undefined;
-
-    await user.save();
-
     res.status(200).json({
-      message: "Email verified successfully!",
+      data: true,
+      message: "Password reset successful",
       userId: user._id,
       email: user.email,
       isEmailVerified: user.isEmailVerified,
-      token: user.createJWT(), //create jwt token for the verified user
-      data: true,
+      token: user.createJWT(),
     });
+  } catch (err) {
+    return res.status(200).json({
+      error: err.message,
+      message: "Password reset failed",
+      data: false,
+    });
+  }
+};
+
+// const verifyEmailCode = async (req, res) => {
+//   try {
+//     const { email, code } = req.body;
+
+//     // Find the user by email
+//     const user = await User.findOne({ email });
+
+//     if (!user) {
+//       return res.status(200).json({ message: "User not found", data: false });
+//     }
+
+//     // Hash the code to compare with the stored hashed code
+//     const hashedCode = crypto.createHash("sha256").update(code).digest("hex");
+
+//     // Check if the code matches and hasn't expired
+//     if (
+//       user.emailVerificationCode !== hashedCode ||
+//       user.emailVerificationExpire < Date.now()
+//     ) {
+//       return res
+//         .status(200)
+//         .json({ message: "Invalid or expired verification code", data: false });
+//     }
+
+//     // Mark the email as verified and clear the verification fields
+//     user.isEmailVerified = true;
+//     user.emailVerificationCode = undefined;
+//     user.emailVerificationExpire = undefined;
+
+//     await user.save();
+
+//     res.status(200).json({
+//       message: "Email verified successfully!",
+//       userId: user._id,
+//       email: user.email,
+//       isEmailVerified: user.isEmailVerified,
+//       token: user.createJWT(), //create jwt token for the verified user
+//       data: true,
+//     });
+//   } catch (error) {
+//     res.status(200).json({
+//       error: error.message,
+//       message: "Email verification failed",
+//       data: false,
+//     });
+//   }
+// };
+
+/**
+ * Controller for verifying email code.
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ * @param {Function} next - The next middleware.
+ */
+const verifyEmailCodeController = async (req, res, next) => {
+  try {
+    const { email, code, token: fcmToken } = req.body;
+
+    if (!email || !code || !fcmToken) {
+      return responseHandler(
+        res,
+        400,
+        "Email, code, and FCM token are required."
+      );
+    }
+
+    // Call the service to verify the email code
+    const data = await verifyEmailCode(email, code, fcmToken);
+
+    // Send success response
+    return responseHandler(res, 200, "Email verified successfully!", data);
   } catch (error) {
-    res
-      .status(200)
-      .json({
-        error: error.message,
-        message: "Email verification failed",
-        data: false,
-      });
+    next(
+      error instanceof CustomError ? error : new CustomError(error.message, 500)
+    );
   }
 };
 
@@ -338,12 +376,10 @@ const resendVerificationCode = async (req, res) => {
       user.emailVerificationExpire &&
       Date.now() < user.emailVerificationExpire
     ) {
-      return res
-        .status(200)
-        .json({
-          message: "You can request a new code only after 2 minutes.",
-          data: false,
-        });
+      return res.status(200).json({
+        message: "You can request a new code only after 2 minutes.",
+        data: false,
+      });
     }
 
     // Generate a new verification code
@@ -391,13 +427,11 @@ const resendVerificationCode = async (req, res) => {
       data: true,
     });
   } catch (error) {
-    res
-      .status(200)
-      .json({
-        error: error.message,
-        message: "Failed to resend verification code",
-        data: false,
-      });
+    res.status(200).json({
+      error: error.message,
+      message: "Failed to resend verification code",
+      data: false,
+    });
   }
 };
 
@@ -420,8 +454,6 @@ const updateUserProfileController = async (req, res, next) => {
   }
 };
 
-
-
 const getAllUsersController = async (req, res, next) => {
   try {
     const { page = 1, limit = 20 } = req.query; // Query parameters for pagination
@@ -439,7 +471,6 @@ const getAllUsersController = async (req, res, next) => {
   }
 };
 
-
 module.exports = updateUserProfileController;
 
 module.exports = {
@@ -447,8 +478,8 @@ module.exports = {
   loginController,
   forgotPassword,
   resetPassword,
-  verifyEmailCode,
+  verifyEmailCodeController,
   resendVerificationCode,
   updateUserProfileController,
-  getAllUsersController
+  getAllUsersController,
 };
