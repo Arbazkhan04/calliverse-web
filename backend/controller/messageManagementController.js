@@ -21,6 +21,8 @@ const uploadFiles = (req, res, next) => {
       );
     }
 
+    console.log("uploaded files in controller",req.files)
+
     const filesMetadata = handleUploadedFiles(req.files);
 
     return responseHandler(

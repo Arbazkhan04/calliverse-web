@@ -4,7 +4,9 @@ const Chat = require("../modals/chatManagementModel.js");
 const deleteFile= require("../utils/deleteFile-Helper.js")
 // Utility function to handle file upload metadata
 const handleUploadedFiles = (files) => {
-  return files.map((file) => {
+
+  console.log(files)
+  return files?.media?.map((file) => {
     let fileType;
 
     if (file.mimetype.startsWith("image/")) fileType = "image";
