@@ -1,20 +1,20 @@
-const multer = require('multer');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
-const { v4: uuidv4 } = require('uuid');
-const path = require('path');
-const { getNamespace } = require('../utils/getContaboNameSpace');
+const multer = require("multer");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { v4: uuidv4 } = require("uuid");
+const path = require("path");
+const { getNamespace } = require("../utils/getContaboNameSpace");
+const { getFileType } = require("../utils/handleUploadedFIles");
 
 // Configure S3 client (contabo)
 const s3 = new S3Client({
-  region: 'eu', // Default region
-  endpoint: 'https://eu2.contabostorage.com', 
+  region: "eu", // Default region
+  endpoint: "https://eu2.contabostorage.com",
   credentials: {
-    accessKeyId: process.env.CONTABO_ACCESS_KEY, 
-    secretAccessKey: process.env.CONTABO_SECRET_KEY, 
+    accessKeyId: process.env.CONTABO_ACCESS_KEY,
+    secretAccessKey: process.env.CONTABO_SECRET_KEY,
   },
   forcePathStyle: true, // Ensure compatibility
 });
-
 
 // Multer memory storage
 const storage = multer.memoryStorage();
@@ -22,17 +22,24 @@ const storage = multer.memoryStorage();
 // File filter
 const fileFilter = (req, file, cb) => {
   const allowedMimeTypes = [
-    'image/jpeg', 'image/png', 'image/gif',
-    'audio/mpeg', 'audio/wav',
-    'video/mp4', 'video/webm', 'video/avi',
-    'application/pdf', 'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel', 'application/zip',
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "audio/mpeg",
+    "audio/wav",
+    "video/mp4",
+    "video/webm",
+    "video/avi",
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/zip",
   ];
   if (allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type.'));
+    cb(new Error("Invalid file type."));
   }
 };
 
@@ -71,19 +78,15 @@ const upload = multer({
 //   }
 // };
 
-
 // Unified middleware to handle multiple fields
 
-
-
 const uploadToContabo = async (file, folder) => {
-
-  const nameSpace= await getNamespace()
-  console.log(`Processing file: ${file.originalname}`); // Log file details
-
-  const fileKey = `${folder}/${uuidv4()}${path.extname(file.originalname)}`;
+  const nameSpace = await getNamespace();
+  // console.log(`Processing file: ${file.originalname}`); // Log file details
+  const fileType = getFileType(file);
+  const fileKey = `${folder}/${fileType}/${uuidv4()}${path.extname(file.originalname)}`;
   const command = new PutObjectCommand({
-    Bucket: 'calliverse',
+    Bucket: "calliverse",
     Key: fileKey,
     Body: file.buffer,
     ContentType: file.mimetype,
@@ -97,48 +100,19 @@ const uploadToContabo = async (file, folder) => {
       fileUrl: `https://eu2.contabostorage.com/${nameSpace}:calliverse/${fileKey}`,
       fileName: file.originalname,
       fileSize: file.size,
-      fileType: file.mimetype.startsWith('image/') ? 'image' :
-                file.mimetype.startsWith('audio/') ? 'audio' :
-                file.mimetype.startsWith('video/') ? 'video' : 'document',
+      fileType: file.mimetype.startsWith("image/")
+        ? "image"
+        : file.mimetype.startsWith("audio/")
+        ? "audio"
+        : file.mimetype.startsWith("video/")
+        ? "video"
+        : "document",
     };
   } catch (error) {
     console.error(`Error uploading ${file.originalname}:`, error);
     throw error;
   }
 };
-
-
-
-
-
-// const handleFileUpload = (fields, folder) => {
-//     return async (req, res, next) => {
-//       const uploadHandler = upload.fields(fields);
-  
-//       uploadHandler(req, res, async (err) => {
-//         if (err) {
-//           return res.status(400).json({ success: false, message: err.message });
-//         }
-  
-//         try {
-//           req.uploadedFiles = {};
-  
-//           // Process each field and upload to R2
-//           for (const fieldName of Object.keys(req.files)) {
-//             req.uploadedFiles[fieldName] = await Promise.all(
-//               req.files[fieldName].map((file) => uploadToContabo(file, folder))
-//             );
-//           }
-  
-//           next();
-//         } catch (error) {
-//           next(error);
-//         }
-//       });
-//     };
-//   };
-  
-
 
 const handleFileUpload = (fields, folder) => {
   return async (req, res, next) => {
@@ -150,34 +124,42 @@ const handleFileUpload = (fields, folder) => {
       }
 
       try {
-        req.uploadedFiles = {};
+        const transformedFiles = {};
 
         for (const fieldName of Object.keys(req.files)) {
-          req.uploadedFiles[fieldName] = await Promise.all(
+          transformedFiles[fieldName] = await Promise.all(
             req.files[fieldName].map(async (file) => {
               try {
                 const uploadedFile = await uploadToContabo(file, folder);
 
-                console.log(uploadedFile.fileUrl)
-                // Match the previous format
+                // Construct and return the transformed file metadata
                 return {
                   fieldname: file.fieldname,
                   originalname: file.originalname,
                   encoding: file.encoding,
                   mimetype: file.mimetype,
-                  destination: path.join(folder, file.mimetype.startsWith('image/') ? 'images' : 'others'),
+                  destination: path.join(
+                    folder,
+                    file.mimetype.startsWith("image/") ? "images" : "others"
+                  ),
                   filename: path.basename(uploadedFile.fileUrl),
                   path: uploadedFile.fileUrl,
                   size: file.size,
                 };
               } catch (err) {
-                console.error(`Failed to upload file: ${file.originalname}`, err);
+                console.error(
+                  `Failed to upload file: ${file.originalname}`,
+                  err
+                );
                 throw err;
               }
             })
           );
         }
 
+        // Update req.files with transformed data
+        req.files = transformedFiles;
+console.log("file attached",req.files)
         next();
       } catch (error) {
         next(error);
@@ -186,9 +168,7 @@ const handleFileUpload = (fields, folder) => {
   };
 };
 
-  
-
 module.exports = {
   uploadToContabo,
-  handleFileUpload
+  handleFileUpload,
 };

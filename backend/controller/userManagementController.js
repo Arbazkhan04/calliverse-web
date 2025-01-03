@@ -439,7 +439,7 @@ const updateUserProfileController = async (req, res, next) => {
   try {
     const userId = req.params.userId;
     const updateData = req.body;
-    const profileImageFile = req.file; // File uploaded via multer
+    const profileImageFile = req.files.profileImage[0]; // File uploaded via multer
 
     // Call the service to update the user
     const updatedUser = await updateUser(userId, updateData, profileImageFile);

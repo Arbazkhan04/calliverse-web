@@ -49,7 +49,7 @@ async function getNamespace() {
     );
 
     const storages = response.data.data;
-    console.log("Object Storages:", storages);
+    // console.log("Object Storages:", storages);
 
     // Assuming you want to retrieve the first storage's namespace
     if (storages.length > 0) {

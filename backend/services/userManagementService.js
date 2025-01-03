@@ -1,9 +1,10 @@
 const User = require("../modals/userManagementModal");
-const deleteFile = require("../utils/deleteFile-Helper"); // File deletion helper
+
 const CustomError = require("../utils/customError"); // Import CustomError
 
 const sendEmail = require("../utils/sendEmail");
-
+// const { deleteFile } = require("./contaboFileStorageService");
+const ContaboService = require("../services/contaboFileStorageService");
 /**
  * Creates a new user and sends an email verification code.
  * @param {Object} userData - The data for creating the user.
@@ -85,15 +86,15 @@ const updateUser = async (userId, updateData, profileImageFile = null) => {
 
     // Handle profile image update if a new image is provided
     if (profileImageFile) {
-      if (user.profileImage && user.profileImage.imageUrl) {
-        deleteFile(user.profileImage.imageUrl); // Delete existing profile image
+      if (user.profileImage && user.profileImage?.imageUrl) {
+        console.log("came in block");
+        await ContaboService.deleteFile(user.profileImage?.imageUrl); // Delete existing profile image
       }
-      const baseUrl = process.env.BASE_URL;
-      const relativePath = profileImageFile.path.replace(process.cwd(), "");
+
       user.profileImage = {
-        imageUrl: `${baseUrl}${relativePath}`,
+        imageUrl: `profileImageFile?.path`,
         imageMimeType: profileImageFile.mimetype,
-        imageName: profileImageFile.originalname,
+        imageName: profileImageFile?.path,
       };
     }
 
@@ -121,15 +122,15 @@ const updateUser = async (userId, updateData, profileImageFile = null) => {
       userId: user._id,
       bio: user?.bio || "",
       websiteLink: user?.websiteLink || "",
-      token: null
+      token: null,
     };
 
     return modifiedUpdatedUser;
   } catch (error) {
+    console.log(error.message);
     throw new CustomError(error.message, error.statusCode || 500);
   }
 };
-
 
 // const login = async (email, password) => {
 //   try {
@@ -213,8 +214,6 @@ const updateUser = async (userId, updateData, profileImageFile = null) => {
 //   }
 // };
 
-
-
 const login = async (email, password) => {
   try {
     // Check if user exists
@@ -297,8 +296,6 @@ const login = async (email, password) => {
   }
 };
 
-
-
 /**
  * Fetches all users with pagination.
  * @param {Number} page - Current page number.
@@ -332,14 +329,13 @@ const fetchAllUsers = async (page = 1, limit = 20) => {
   }
 };
 
-
 /**
  * Verifies the email verification code.
  * @param {String} email - The email of the user.
  * @param {String} code - The verification code provided by the user.
  * @returns {Object} - Contains user details and a JWT token if verified.
  */
-const verifyEmailCode = async (email, code,fcmToken) => {
+const verifyEmailCode = async (email, code, fcmToken) => {
   try {
     // Find the user by email
     const user = await User.findOne({ email });
@@ -367,9 +363,8 @@ const verifyEmailCode = async (email, code,fcmToken) => {
     // Save the updated user document
     await user.save();
 
-
-     // Save the FCM token
-     await saveFcmToken(user._id, fcmToken);
+    // Save the FCM token
+    await saveFcmToken(user._id, fcmToken);
 
     // Return user details and JWT token
     return {
@@ -383,6 +378,10 @@ const verifyEmailCode = async (email, code,fcmToken) => {
   }
 };
 
-
-
-module.exports = { login, updateUser, createUser, fetchAllUsers,verifyEmailCode };
+module.exports = {
+  login,
+  updateUser,
+  createUser,
+  fetchAllUsers,
+  verifyEmailCode,
+};

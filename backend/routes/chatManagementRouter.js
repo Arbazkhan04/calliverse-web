@@ -1,6 +1,5 @@
 const express = require("express");
 const router = express.Router();
-const upload = require("../middleware/file-upload");
 const { createChat,fetchAllChatsController } = require("../controller/chatManagementController");
 const { auth, authorizeRoles } = require("../middleware/authentication");
 const validateRequest = require("../middleware/validateRequests");

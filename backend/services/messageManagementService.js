@@ -1,11 +1,13 @@
 const CustomError = require("../utils/customError.js");
 const Message = require("../modals/messageManagementModel.js");
 const Chat = require("../modals/chatManagementModel.js");
-const deleteFile= require("../utils/deleteFile-Helper.js")
+const deleteFile = require("../utils/deleteFile-Helper.js");
+
+const ContaboService = require("../services/contaboFileStorageService");
+
 // Utility function to handle file upload metadata
 const handleUploadedFiles = (files) => {
-
-  console.log(files)
+  console.log("files in utility function", files);
   return files?.media?.map((file) => {
     let fileType;
 
@@ -16,12 +18,10 @@ const handleUploadedFiles = (files) => {
 
     return {
       fileType: fileType,
-      fileName: file.filename,
-      fileUrl: `http://localhost:3003/uploads/${
-        file.destination.split("uploads/")[1]
-      }/${file.filename}`,
-      fileSize: file.size,
-      duration: file.mimetype.startsWith("audio/") ? file.duration : undefined,
+      fileName: file?.filename,
+      fileUrl: file?.path,
+      fileSize: file?.size,
+      duration: file?.mimetype.startsWith("audio/") ? file.duration : undefined,
     };
   });
 };
@@ -48,7 +48,10 @@ const createMessage = async ({
   let newMessage;
   if (messageType === "media") {
     if (!files || files.length === 0) {
-      throw new CustomError("Media files are required for media messages.", 400);
+      throw new CustomError(
+        "Media files are required for media messages.",
+        400
+      );
     }
 
     newMessage = new Message({
@@ -74,7 +77,10 @@ const createMessage = async ({
       timestamp: Date.now(),
     });
   } else {
-    throw new CustomError("Invalid message type or missing required fields.", 400);
+    throw new CustomError(
+      "Invalid message type or missing required fields.",
+      400
+    );
   }
 
   await newMessage.save();
@@ -93,37 +99,22 @@ const getUndeliveredMessages = async (receiverId) => {
   return await Message.find({ receiverId, delivered: false });
 };
 
-
 const deleteMediaFile = async (fileUrl) => {
-    try {
-      if (!fileUrl || typeof fileUrl !== "string") {
-        throw new CustomError("Invalid file URL provided", 400);
-      }
-  
-      // Remove the base URL if present
-    const baseUrl = process.env.BASE_URL || "http://localhost:3003";
-
-    // Remove the base URL dynamically
-    const relativePath = fileUrl.replace(baseUrl, "");
-      console.log("File URL:", fileUrl);
-      console.log("Relative path for deletion:", relativePath);
-  
-      const deleteResult = deleteFile(relativePath);
-  
-      if (!deleteResult.success) {
-        throw new CustomError(deleteResult.message || "File not found", 404);
-      }
-  
-      return { success: true, message: "File deleted successfully" };
-    } catch (error) {
-      console.error("Error in deleteMediaFile:", error.message);
-      return { success: false, message: error.message };
+  try {
+    if (!fileUrl || typeof fileUrl !== "string") {
+      throw new CustomError("Invalid file URL provided", 400);
     }
-  };
 
+    const deleteResult = ContaboService.deleteFile(fileUrl);
 
+    return { success: true, message: "File deleted successfully" };
+  } catch (error) {
+    console.error("Error in deleteMediaFile:", error.message);
+    return { success: false, message: error.message };
+  }
+};
 
-  /**
+/**
  * Fetches all messages for a chat with pagination.
  * @param {String} chatId - The ID of the chat.
  * @param {Number} page - The current page.
@@ -131,35 +122,31 @@ const deleteMediaFile = async (fileUrl) => {
  * @returns {Object} - Paginated list of messages and total count.
  */
 const fetchAllMessages = async (chatId, page = 1, limit = 20) => {
-    const skip = (page - 1) * limit;
-  
-    // Verify if the chatId exists
-    const chatExists = await Chat.findById(chatId);
-    if (!chatExists) {
-      throw new CustomError('Chat not found', 404);
-    }
-  
-    // Fetch messages with pagination
-    const messages = await Message.find({ chatId })
-      .sort({ createdAt: -1 }) // Order by newest first
-      .skip(skip)
-      .limit(limit);
-      // .populate('senderId', 'userName email'); // Populate sender details
-  
-    // Get the total count of messages for the chat
-    const totalMessages = await Message.countDocuments({ chatId });
-  
-    return {
-      messages,
-      totalMessages,
-      currentPage: page,
-      totalPages: Math.ceil(totalMessages / limit),
-    };
+  const skip = (page - 1) * limit;
+
+  // Verify if the chatId exists
+  const chatExists = await Chat.findById(chatId);
+  if (!chatExists) {
+    throw new CustomError("Chat not found", 404);
+  }
+
+  // Fetch messages with pagination
+  const messages = await Message.find({ chatId })
+    .sort({ createdAt: -1 }) // Order by newest first
+    .skip(skip)
+    .limit(limit);
+  // .populate('senderId', 'userName email'); // Populate sender details
+
+  // Get the total count of messages for the chat
+  const totalMessages = await Message.countDocuments({ chatId });
+
+  return {
+    messages,
+    totalMessages,
+    currentPage: page,
+    totalPages: Math.ceil(totalMessages / limit),
   };
-
-
-
-
+};
 
 /**
  * Updates a message with the given ID and update data.
@@ -189,9 +176,6 @@ const fetchAllMessages = async (chatId, page = 1, limit = 20) => {
 //   }
 // };
 
-
-
-
 const updateMessage = async (messageId, updateData) => {
   try {
     // Validate that the message exists
@@ -214,13 +198,11 @@ const updateMessage = async (messageId, updateData) => {
   }
 };
 
-
-
-
 module.exports = {
   handleUploadedFiles,
   createMessage,
-  getUndeliveredMessages,deleteMediaFile,
+  getUndeliveredMessages,
+  deleteMediaFile,
   fetchAllMessages,
-  updateMessage
+  updateMessage,
 };
