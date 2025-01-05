@@ -25,8 +25,8 @@ module.exports = (io, socket, onlineUsers) => {
       if (calleeSocketId) {
         // Emit callRequest if the recipient's socket is connected
         io.to(calleeSocketId).emit("callRequest", {
-          callId,
-          callerId,
+            callId,
+            callerId,
           callType,
           offer,
           candidates,
