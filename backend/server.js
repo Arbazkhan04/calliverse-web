@@ -3,7 +3,7 @@ const express = require("express");
 const connectDb = require("./db/connect.js");
 const errorHandler = require("./middleware/errorHandler.js");
 const path = require('path'); 
-
+const admin = require("./config/firebase.js")
 const cors = require("cors");
 const morgan = require("morgan");
 const { initializeSocket } = require("./sockets/socket.js");

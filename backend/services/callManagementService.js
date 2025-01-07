@@ -37,7 +37,10 @@ class CallService {
       throw new CustomError("Call ID and update data are required.", 400);
     }
 
+   
+   
     const updatedCall = await Call.findOneAndUpdate({ callId }, updateData, { new: true });
+    console.log("updated Call",updatedCall)
     if (!updatedCall) {
       throw new CustomError("Call not found.", 404);
     }
@@ -110,7 +113,7 @@ class CallService {
       throw new CustomError("Call ID is required.", 400);
     }
 
-    const call = await Call.findOne({ callId }).populate("participants", "_id userName email profileImage");
+    const call = await Call.findOne({ callId }).select("participants callId status callType");
     if (!call) {
       throw new CustomError("Call not found.", 404);
     }

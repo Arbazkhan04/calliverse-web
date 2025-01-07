@@ -1,4 +1,4 @@
-const admin = require("../config/firebase-config");
+const admin = require("../config/firebase");
 const CustomError = require("../utils/customError");
 
 /**
@@ -10,20 +10,38 @@ const CustomError = require("../utils/customError");
  */
 const sendNotification = async (tokens, payload, options = {}) => {
   try {
-    // Check if tokens is a single string, convert to array
+    // Ensure tokens is an array
     if (typeof tokens === "string") {
       tokens = [tokens];
     }
 
+    // Filter out any invalid or empty tokens
+    tokens = tokens.filter((token) => token && token.trim() !== "");
+
+    if (tokens.length === 0) {
+      throw new CustomError("No valid FCM tokens provided.", 400);
+    }
+
     const message = {
-      tokens,
       ...payload,
+      ...options,
     };
 
-    // Send notification using FCM
-    const response = await admin.messaging().sendMulticast(message);
+    let response;
 
-    // Check for failed tokens
+    if (tokens.length === 1) {
+      //validate token
+      const validateTOken = await validateToken(tokens[0]);
+      // Send to a single device
+      message.token = tokens[0];
+      response = await admin.messaging().send(message);
+    } else {
+      // Send to multiple devices
+      message.tokens = tokens;
+      response = await admin.messaging().sendMulticast(message);
+    }
+
+    // Handle any failures in the response
     if (response.failureCount > 0) {
       const failedTokens = [];
       response.responses.forEach((resp, idx) => {
@@ -47,5 +65,14 @@ const sendNotification = async (tokens, payload, options = {}) => {
     throw new CustomError(error.message || "Failed to send notification", 500);
   }
 };
+
+async function validateToken(fcmToken) {
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(fcmToken);
+    console.log("Decoded Token:", decodedToken);
+  } catch (error) {
+    console.error("Invalid FCM Token:", error.message);
+  }
+}
 
 module.exports = { sendNotification };
