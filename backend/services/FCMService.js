@@ -1,5 +1,6 @@
 const User = require("../modals/userManagementModal");
 const CustomError = require("../utils/customError");
+const { sendNotification } = require("../utils/sendNotification");
 
 /**
  * Adds or updates an FCM token for a user.
@@ -26,4 +27,28 @@ const saveFcmToken = async (userId, token) => {
   }
 };
 
-module.exports = { saveFcmToken };
+
+/**
+ * Service to handle sending notifications using FCM.
+ * @param {String|Array} fcmTokens - FCM token(s) of the device(s).
+ * @param {Object} payload - The notification payload (contains notification and data).
+ * @returns {Promise<Object>} - Response from FCM.
+ */
+const sendNotificationService = async (fcmTokens, payload) => {
+  try {
+    if (!fcmTokens || !payload) {
+      throw new CustomError("FCM tokens and payload are required.", 400);
+    }
+
+    // Call the helper function to send notifications
+    const response = await sendNotification(fcmTokens, payload);
+
+    return response;
+  } catch (error) {
+    console.error("Error in sendNotificationService:", error.message);
+    throw new CustomError(error.message || "Failed to send notification", 500);
+  }
+};
+
+
+module.exports = { saveFcmToken,sendNotificationService };

@@ -1,13 +1,11 @@
 const CallService = require("../../services/callManagementService");
 const { v4: uuidv4 } = require("uuid");
 const CustomError = require("../../utils/customError");
-// const { getUserFcmToken } = require("../../utils/getFCMToken");
-// const { sendNotification } = require("../../utils/sendNotification");
 
 module.exports = (io, socket, onlineUsers) => {
   /**
    * Event: initiateCall
-   * Handles initiating a call and determining the recipient's state.
+   * Handles initiating a call by sending an offer.
    */
   socket.on("initiateCall", async ({ callerId, calleeId, callType, offer }, callback) => {
     try {
@@ -25,7 +23,7 @@ module.exports = (io, socket, onlineUsers) => {
       const calleeSocketId = onlineUsers.get(calleeId);
 
       if (calleeSocketId) {
-        // Recipient is online via WebSocket
+        console.log(`Notifying recipient (${calleeId}) about the call request.`);
         io.to(calleeSocketId).emit("callRequest", {
           callId,
           callerId,
@@ -33,7 +31,7 @@ module.exports = (io, socket, onlineUsers) => {
           offer,
         });
       } else {
-        // Fallback logic for offline recipient (Firebase notifications commented out)
+        // Fallback for offline recipient (keep FCM notification commented)
         /*
         const fcmToken = await getUserFcmToken(calleeId);
         if (fcmToken) {
@@ -52,43 +50,8 @@ module.exports = (io, socket, onlineUsers) => {
           await sendNotification(fcmToken, payload);
         }
         */
-        console.log(`Recipient (${calleeId}) is offline, skipping FCM notification.`);
+        console.log(`Recipient (${calleeId}) is offline. Call notification skipped.`);
       }
-
-      // Set a timeout for unanswered calls
-      setTimeout(async () => {
-        const call = await CallService.getCallByCallId(callId);
-
-        // If the call is still "initiated", mark it as "missed"
-        if (call && call.status === "initiated") {
-          await CallService.updateCall(callId, { status: "missed" });
-
-          // Notify the caller about the missed call
-          const callerSocketId = onlineUsers.get(callerId);
-          if (callerSocketId) {
-            io.to(callerSocketId).emit("callMissed", { callId, calleeId });
-          }
-
-          // Optionally notify the callee about the missed call (commented out)
-          /*
-          const fcmToken = await getUserFcmToken(calleeId);
-          if (fcmToken) {
-            const missedPayload = {
-              notification: {
-                title: "Missed Call",
-                body: `You missed a ${callType} call from ${callerId}.`,
-              },
-              data: {
-                callId,
-                callerId,
-                callType,
-              },
-            };
-            await sendNotification(fcmToken, missedPayload);
-          }
-          */
-        }
-      }, 30000); // 30 seconds timeout for unanswered calls
 
       callback({ success: true, callId });
     } catch (error) {
@@ -99,82 +62,84 @@ module.exports = (io, socket, onlineUsers) => {
 
   /**
    * Event: acceptCall
-   * Handles the recipient accepting a call and notifying the caller.
+   * Handles the recipient accepting a call by sending an answer.
    */
-  socket.on("acceptCall", async ({ callId,calleeId, answer }, callback) => {
+  socket.on("acceptCall", async ({ callId, calleeId, answer }, callback) => {
     try {
-
-
-        console.log("answer is here",answer)
-      // Update call status to active using the service
       const updatedCall = await CallService.updateCall(callId, {
         status: "active",
         startedAt: new Date(),
       });
 
-      // Notify the caller
       const callerId = updatedCall.participants.find((id) => id !== calleeId).toString();
-      console.log("caller id to send answer",callerId)
       const callerSocketId = onlineUsers.get(callerId);
+
       if (callerSocketId) {
-        io.to(callerSocketId).emit("callAccepted", { callId, answer });
+        console.log(`Notifying caller (${callerId}) about the accepted call.`);
+        io.to(callerSocketId).emit("callAccepted", {
+          callId,
+          answer,
+        });
+      } else {
+        console.warn(`Caller (${callerId}) is offline. Answer cannot be delivered.`);
       }
 
-      // Acknowledge the recipient
       callback({ success: true, message: "Call accepted." });
     } catch (error) {
       console.error("Error in acceptCall event:", error.message);
-      if (callback) {
-        callback({ success: false, error: error.message });
-      }
+      callback({ success: false, error: error.message });
     }
   });
 
   /**
-   * Event: candidate
-   * Handles the transfer of ICE candidates between peers.
+   * Event: sendIceCandidate
+   * Handles relaying ICE candidates between participants.
    */
-  socket.on("candidate", async ({ callId, callerId, candidate }, callback) => {
+  socket.on("sendIceCandidate", async ({ callId, senderId, candidate }, callback) => {
     try {
+
+      console.log(callId,senderId,candidate)
+      // Validate input
+      if (!callId || !senderId || !candidate) {
+        throw new CustomError("Missing required fields: callId, senderId, or candidate.", 400);
+      }
+
+      // Fetch the call details
       const call = await CallService.getCallByCallId(callId);
 
-      console.log("call in candidate event",call)
-      if (!call) {
-        throw new CustomError(`Call with ID ${callId} not found.`, 404);
-      }
-
-      const recipientId = call.participants.find((id) => id !== callerId).toString();
-
-      console.log("id of candidate event recepient",recipientId)
+      // Determine the recipient
+      const recipientId = call.participants.find((participant) => participant.toString() !== senderId);
       if (!recipientId) {
-        throw new CustomError(`Recipient for call ${callId} not found.`, 400);
+        throw new CustomError("Recipient not found for the call.", 404);
       }
 
-      const recipientSocketId = onlineUsers.get(recipientId);
+      // Get the recipient's socket ID
+      const recipientSocketId = onlineUsers.get(recipientId.toString());
+
       if (recipientSocketId) {
-        io.to(recipientSocketId).emit("candidate", { candidate, callId });
-        callback({ success: true, message: "Candidate forwarded successfully." });
+        console.log(`Relaying ICE candidate to recipient (${recipientId}).`);
+        io.to(recipientSocketId).emit("iceCandidate", { candidate });
       } else {
-        callback({ success: false, message: "Recipient is offline." });
+        console.warn(`Recipient (${recipientId}) is offline. ICE candidate cannot be delivered.`);
       }
+
+      callback({ success: true });
     } catch (error) {
-      console.error("Error handling candidate event:", error.message);
-      if (callback) {
-        callback({ success: false, error: error.message });
-      }
+      console.error("Error in sendIceCandidate event:", error.message);
+      callback({ success: false, error: error.message });
     }
   });
 
   /**
    * Event: endCall
-   * Handles ending a call and notifying both parties.
+   * Handles ending a call.
    */
   socket.on("endCall", async ({ callId }, callback) => {
     try {
       const call = await CallService.getCallByCallId(callId);
       if (!call) throw new CustomError("Call not found.", 404);
 
-      const duration = (new Date() - call.startedAt) / 1000;
+      const duration = Math.max(0, (new Date() - new Date(call.initiatedAt)) / 1000);
       const updatedCall = await CallService.updateCall(callId, {
         status: "ended",
         endedAt: new Date(),
@@ -184,6 +149,7 @@ module.exports = (io, socket, onlineUsers) => {
       updatedCall.participants.forEach((userId) => {
         const userSocketId = onlineUsers.get(userId);
         if (userSocketId) {
+          console.log(`Notifying user (${userId}) about the call ending.`);
           io.to(userSocketId).emit("callEnded", { callId, duration });
         }
       });
@@ -191,9 +157,7 @@ module.exports = (io, socket, onlineUsers) => {
       callback({ success: true, message: "Call ended successfully.", duration });
     } catch (error) {
       console.error("Error in endCall event:", error.message);
-      if (callback) {
-        callback({ success: false, error: error.message });
-      }
+      callback({ success: false, error: error.message });
     }
   });
 };
