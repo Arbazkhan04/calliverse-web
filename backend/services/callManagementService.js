@@ -113,7 +113,7 @@ class CallService {
       throw new CustomError("Call ID is required.", 400);
     }
 
-    const call = await Call.findOne({ callId }).select("participants callId status callType");
+    const call = await Call.findOne({ callId }).select("participants initiatedAt callId status callType");
     if (!call) {
       throw new CustomError("Call not found.", 404);
     }

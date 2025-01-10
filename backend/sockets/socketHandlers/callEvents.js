@@ -130,22 +130,59 @@ module.exports = (io, socket, onlineUsers) => {
     }
   });
 
-  /**
-   * Event: endCall
-   * Handles ending a call.
-   */
+  // /**
+  //  * Event: endCall
+  //  * Handles ending a call.
+  //  */
+  // socket.on("endCall", async ({ callId }, callback) => {
+  //   try {
+  //     const call = await CallService.getCallByCallId(callId);
+  //     if (!call) throw new CustomError("Call not found.", 404);
+
+  //     const duration = Math.max(0, (new Date() - new Date(call.initiatedAt)) / 1000);
+  //     const updatedCall = await CallService.updateCall(callId, {
+  //       status: "ended",
+  //       endedAt: new Date(),
+  //       duration,
+  //     });
+
+  //     updatedCall.participants.forEach((userId) => {
+  //       const userSocketId = onlineUsers.get(userId);
+  //       if (userSocketId) {
+  //         console.log(`Notifying user (${userId}) about the call ending.`);
+  //         io.to(userSocketId).emit("callEnded", { callId, duration });
+  //       }
+  //     });
+
+  //     callback({ success: true, message: "Call ended successfully.", duration });
+  //   } catch (error) {
+  //     console.error("Error in endCall event:", error.message);
+  //     callback({ success: false, error: error.message });
+  //   }
+  // });
+
+
+
   socket.on("endCall", async ({ callId }, callback) => {
     try {
       const call = await CallService.getCallByCallId(callId);
       if (!call) throw new CustomError("Call not found.", 404);
-
-      const duration = Math.max(0, (new Date() - new Date(call.initiatedAt)) / 1000);
+  
+      // Validate initiatedAt
+      const initiatedAt = call?.initiatedAt;
+      console.log("call",call)
+      if (isNaN(initiatedAt.getTime())) {
+        throw new CustomError("Invalid initiatedAt date.", 400);
+      }
+  
+      const duration = Math.max(0, (new Date() - initiatedAt) / 1000);
+  
       const updatedCall = await CallService.updateCall(callId, {
         status: "ended",
         endedAt: new Date(),
         duration,
       });
-
+  
       updatedCall.participants.forEach((userId) => {
         const userSocketId = onlineUsers.get(userId);
         if (userSocketId) {
@@ -153,11 +190,12 @@ module.exports = (io, socket, onlineUsers) => {
           io.to(userSocketId).emit("callEnded", { callId, duration });
         }
       });
-
+  
       callback({ success: true, message: "Call ended successfully.", duration });
     } catch (error) {
       console.error("Error in endCall event:", error.message);
       callback({ success: false, error: error.message });
     }
   });
+  
 };
